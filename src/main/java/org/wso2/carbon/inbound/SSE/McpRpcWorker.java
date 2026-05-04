@@ -86,6 +86,10 @@ public class McpRpcWorker implements Runnable {
             } else {
                 log.debug("McpRpcWorker: No response to send for SSE session [" + sseSessionId + "] (notification)");
             }
+            // Link MCP session to SSE session for cleanup when SSE closes
+            if (result.newSessionId != null) {
+                McpSseSessionRegistry.getInstance().associateMcpSession(sseSessionId, result.newSessionId);
+            }
             sendAcceptedResponse(result.newSessionId);
         } catch (Exception e) {
             log.error("McpRpcWorker failed", e);

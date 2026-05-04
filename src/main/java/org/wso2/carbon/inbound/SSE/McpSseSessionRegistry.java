@@ -24,6 +24,7 @@ public class McpSseSessionRegistry {
     private static final McpSseSessionRegistry INSTANCE = new McpSseSessionRegistry();
 
     private final ConcurrentHashMap<String, McpSseWorker> sessions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> sseToMcpSessionMapping = new ConcurrentHashMap<>();
 
     private McpSseSessionRegistry() {
     }
@@ -38,6 +39,16 @@ public class McpSseSessionRegistry {
 
     public void unregister(String sessionId) {
         sessions.remove(sessionId);
+        String mcpSessionId = sseToMcpSessionMapping.remove(sessionId);
+        if (mcpSessionId != null) {
+            McpSessionRegistry.getInstance().remove(mcpSessionId);
+        }
+    }
+
+    public void associateMcpSession(String sseSessionId, String mcpSessionId) {
+        if (sseSessionId != null && mcpSessionId != null) {
+            sseToMcpSessionMapping.put(sseSessionId, mcpSessionId);
+        }
     }
 
     public McpSseWorker getSession(String sessionId) {
