@@ -104,8 +104,9 @@ public class McpSseWorker implements Runnable {
 
         try (OutputStream out = pipe.getOutputStream()) {
             String host = getHeader("Host");
+            String scheme = getScheme();
             String endpointUrl = (host != null)
-                    ? "http://" + host + McpConstants.PATH_MCP + "?sessionId=" + sessionId
+                    ? scheme + "://" + host + McpConstants.PATH_MCP + "?sessionId=" + sessionId
                     : McpConstants.PATH_MCP + "?sessionId=" + sessionId;
             writeRaw(out, "event: endpoint\ndata: " + endpointUrl + "\n\n");
 
@@ -138,6 +139,21 @@ public class McpSseWorker implements Runnable {
         }
         Header h = request.getRequest().getFirstHeader(headerName);
         return h != null ? h.getValue() : null;
+    }
+
+    private String getScheme() {
+        // Check X-Forwarded-Proto header (set by TLS-terminating proxies like nginx, AWS ALB)
+        String forwardedProto = getHeader("X-Forwarded-Proto");
+        if (forwardedProto != null && !forwardedProto.trim().isEmpty()) {
+            String proto = forwardedProto.trim().toLowerCase();
+            // Accept https, http, or https with port (https:443)
+            if (proto.startsWith("https") || proto.equals("http")) {
+                return proto.startsWith("https") ? "https" : "http";
+            }
+        }
+
+        // Default to HTTP (most MI deployments use reverse proxies that set X-Forwarded-Proto)
+        return "http";
     }
 
     private void writeRaw(OutputStream out, String text) throws IOException {
