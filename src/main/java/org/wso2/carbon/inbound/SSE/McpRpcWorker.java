@@ -54,6 +54,22 @@ public class McpRpcWorker implements Runnable {
 
             // Determine method without fully parsing (avoids double-parse on error)
             String method = extractMethod(requestBody);
+
+            // Validate SSE session exists BEFORE calling protocolHandler to prevent side effects
+            String sseSessionId = extractQueryParam("sessionId");
+            if (sseSessionId == null) {
+                sendJsonError(400, McpConstants.ERROR_INVALID_REQUEST,
+                        "Missing sessionId: open an SSE stream first via GET /mcp");
+                return;
+            }
+
+            McpSseWorker sseWorker = McpSseSessionRegistry.getInstance().getSession(sseSessionId);
+            if (sseWorker == null) {
+                sendJsonError(404, McpConstants.ERROR_INTERNAL, "SSE session not found: " + sseSessionId);
+                return;
+            }
+
+            // Validate MCP session for non-initialize requests
             if (!McpConstants.METHOD_INITIALIZE.equals(method)) {
                 String incomingSessionId = getHeader(McpConstants.HEADER_MCP_SESSION_ID);
                 if (incomingSessionId != null && !McpSessionRegistry.getInstance().isValid(incomingSessionId)) {
@@ -63,21 +79,6 @@ public class McpRpcWorker implements Runnable {
             }
 
             McpProtocolHandler.HandleResult result = protocolHandler.handle(requestBody);
-
-            String sseSessionId = extractQueryParam("sessionId");
-
-            if (sseSessionId == null) {
-                sendJsonError(400, McpConstants.ERROR_INVALID_REQUEST,
-                        "Missing sessionId: open an SSE stream first via GET /mcp");
-                return;
-            }
-
-            // SSE transport — push response to the SSE stream and return 202 Accepted.
-            McpSseWorker sseWorker = McpSseSessionRegistry.getInstance().getSession(sseSessionId);
-            if (sseWorker == null) {
-                sendJsonError(404, McpConstants.ERROR_INTERNAL, "SSE session not found: " + sseSessionId);
-                return;
-            }
             if (result.response != null) {
                 log.debug("McpRpcWorker: Sending response to SSE session [" + sseSessionId + "]");
                 sseWorker.sendEvent("message", result.response.toString());
