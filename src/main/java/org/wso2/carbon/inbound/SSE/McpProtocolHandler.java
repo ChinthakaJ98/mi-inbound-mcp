@@ -235,7 +235,7 @@ public class McpProtocolHandler {
         String mapKey = (localEntryName != null && !localEntryName.isEmpty())
                 ? localEntryName + ":" + toolName : toolName;
         if (toolsMap == null || !toolsMap.containsKey(mapKey)) {
-            return errorResponse(id, McpConstants.ERROR_INVALID_PARAMS, "Tool not found: " + toolName);
+            return errorResponse(id, McpConstants.ERROR_TOOL_NOT_FOUND, "Tool not found: " + toolName);
         }
 
         Map<String, Object> toolDefinition = toolsMap.get(mapKey);
