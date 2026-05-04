@@ -24,7 +24,7 @@
         <subComponents>
             <subComponent>
                 <name>inboundEndpointClass</name>
-                <type>org.wso2.carbon.inbound.SSE.SSEMessageConsumer</type>
+                <type>org.wso2.carbon.inbound.SSE.McpInboundListener</type>
             </subComponent>
         </subComponents>
     </component>
