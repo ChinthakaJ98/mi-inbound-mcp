@@ -257,6 +257,10 @@ public class McpProtocolHandler {
                     synapseEnvironment, seqObj.toString().trim());
             return executor.execute(toolName, args, toolDefinition);
         }
+        if (!hasValidApiTarget(toolDefinition)) {
+            throw new McpToolExecutionException("Tool '" + toolName
+                    + "' is misconfigured: missing a usable 'sequence' or API target");
+        }
         SynapseConfiguration synapseConfig = synapseEnvironment.getSynapseConfiguration();
         ApiToolExecutor executor = new ApiToolExecutor(mainHttpPort, synapseConfig);
         return executor.execute(toolDefinition, args);
@@ -294,5 +298,31 @@ public class McpProtocolHandler {
         response.put(McpConstants.ID, id != null ? id : JSONObject.NULL);
         response.put(McpConstants.ERROR, error);
         return response;
+    }
+
+    private boolean hasValidApiTarget(Map<String, Object> toolDefinition) {
+        if (toolDefinition == null || toolDefinition.isEmpty()) {
+            return false;
+        }
+        Object api = toolDefinition.get("api");
+        if (api instanceof Map) {
+            Map<?, ?> apiMap = (Map<?, ?>) api;
+            if (hasNonEmptyValue(apiMap.get("path"))
+                    || hasNonEmptyValue(apiMap.get("url"))
+                    || hasNonEmptyValue(apiMap.get("endpoint"))
+                    || hasNonEmptyValue(apiMap.get("resource"))) {
+                return true;
+            }
+        } else if (hasNonEmptyValue(api)) {
+            return true;
+        }
+        return hasNonEmptyValue(toolDefinition.get("path"))
+                || hasNonEmptyValue(toolDefinition.get("url"))
+                || hasNonEmptyValue(toolDefinition.get("endpoint"))
+                || hasNonEmptyValue(toolDefinition.get("resource"));
+    }
+
+    private boolean hasNonEmptyValue(Object value) {
+        return value != null && !value.toString().trim().isEmpty();
     }
 }
