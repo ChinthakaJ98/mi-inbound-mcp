@@ -25,6 +25,7 @@ public class McpSseSessionRegistry {
 
     private final ConcurrentHashMap<String, McpSseWorker> sessions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> sseToMcpSessionMapping = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> mcpToSseSessionMapping = new ConcurrentHashMap<>();
 
     private McpSseSessionRegistry() {
     }
@@ -41,6 +42,7 @@ public class McpSseSessionRegistry {
         sessions.remove(sessionId);
         String mcpSessionId = sseToMcpSessionMapping.remove(sessionId);
         if (mcpSessionId != null) {
+            mcpToSseSessionMapping.remove(mcpSessionId);
             McpSessionRegistry.getInstance().remove(mcpSessionId);
         }
     }
@@ -48,7 +50,16 @@ public class McpSseSessionRegistry {
     public void associateMcpSession(String sseSessionId, String mcpSessionId) {
         if (sseSessionId != null && mcpSessionId != null) {
             sseToMcpSessionMapping.put(sseSessionId, mcpSessionId);
+            mcpToSseSessionMapping.put(mcpSessionId, sseSessionId);
         }
+    }
+
+    public boolean isMcpSessionBoundToSse(String sseSessionId, String mcpSessionId) {
+        if (sseSessionId == null || mcpSessionId == null) {
+            return false;
+        }
+        String boundMcpSession = sseToMcpSessionMapping.get(sseSessionId);
+        return mcpSessionId.equals(boundMcpSession);
     }
 
     public McpSseWorker getSession(String sessionId) {

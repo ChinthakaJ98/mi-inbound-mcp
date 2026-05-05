@@ -72,9 +72,17 @@ public class McpRpcWorker implements Runnable {
             // Validate MCP session for non-initialize requests
             if (!McpConstants.METHOD_INITIALIZE.equals(method)) {
                 String incomingSessionId = getHeader(McpConstants.HEADER_MCP_SESSION_ID);
-                if (incomingSessionId != null && !McpSessionRegistry.getInstance().isValid(incomingSessionId)) {
-                    sendJsonError(404, McpConstants.ERROR_INTERNAL, "Session not found or expired");
-                    return;
+                if (incomingSessionId != null) {
+                    // Verify MCP session exists and belongs to this SSE session
+                    if (!McpSessionRegistry.getInstance().isValid(incomingSessionId)) {
+                        sendJsonError(404, McpConstants.ERROR_INTERNAL, "Session not found or expired");
+                        return;
+                    }
+                    if (!McpSseSessionRegistry.getInstance().isMcpSessionBoundToSse(sseSessionId, incomingSessionId)) {
+                        sendJsonError(403, McpConstants.ERROR_INVALID_REQUEST,
+                                "MCP session does not belong to this SSE connection");
+                        return;
+                    }
                 }
             }
 
