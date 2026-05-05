@@ -26,6 +26,18 @@ import org.json.JSONObject;
 
 import java.util.Map;
 import java.util.Objects;
+
+class ToolsListCacheEntry {
+    final JSONObject response;
+    final Map<String, Map<String, Object>> toolsMap;
+    final String localEntryName;
+
+    ToolsListCacheEntry(JSONObject response, Map<String, Map<String, Object>> toolsMap, String localEntryName) {
+        this.response = response;
+        this.toolsMap = toolsMap;
+        this.localEntryName = localEntryName;
+    }
+}
 public class McpProtocolHandler {
 
     public static class HandleResult {
@@ -47,11 +59,10 @@ public class McpProtocolHandler {
     private final String localEntryName;
     private final SynapseEnvironment synapseEnvironment;
     private final int mainHttpPort;
-    
-    // Cache for tools list response
-    private JSONObject cachedToolsListResponse;
-    private Map<String, Map<String, Object>> cachedToolsMap;
-    private String cachedLocalEntryName;
+
+    // Cache for tools list response (accessed by multiple concurrent request handlers)
+    private volatile ToolsListCacheEntry cachedEntry;
+    private final Object cacheLock = new Object();
 
     public McpProtocolHandler(String serverName, String serverVersion, String localEntryName,
                               SynapseEnvironment synapseEnvironment, int mainHttpPort) {
@@ -129,13 +140,14 @@ public class McpProtocolHandler {
         Map<String, Map<String, Object>> currentToolsMap = getMcpToolsMap(synapseConfig);
 
         // Check if cache is still valid (same tools map and local entry name)
-        if (cachedToolsListResponse != null && 
-            java.util.Objects.equals(cachedToolsMap, currentToolsMap) &&
-            java.util.Objects.equals(cachedLocalEntryName, localEntryName)) {
+        ToolsListCacheEntry entry = cachedEntry;
+        if (entry != null &&
+            Objects.equals(entry.toolsMap, currentToolsMap) &&
+            Objects.equals(entry.localEntryName, localEntryName)) {
             if (log.isDebugEnabled()) {
                 log.debug("Returning cached tools list response");
             }
-            return cachedToolsListResponse;
+            return entry.response;
         }
 
         // Cache miss or invalidated — rebuild the tools list
@@ -150,15 +162,15 @@ public class McpProtocolHandler {
                 ? localEntryName + ":" : null;
 
         if (currentToolsMap != null && !currentToolsMap.isEmpty()) {
-            for (Map.Entry<String, Map<String, Object>> entry : currentToolsMap.entrySet()) {
-                String key = entry.getKey();
+            for (Map.Entry<String, Map<String, Object>> mapEntry : currentToolsMap.entrySet()) {
+                String key = mapEntry.getKey();
                 // If a local entry filter is set, skip tools from other local entries
                 if (prefix != null && !key.startsWith(prefix)) {
                     continue;
                 }
                 // Strip the "localentryname:" prefix so clients see only the tool name
                 String toolName = (prefix != null) ? key.substring(prefix.length()) : key;
-                Map<String, Object> toolDetails = entry.getValue();
+                Map<String, Object> toolDetails = mapEntry.getValue();
 
                 JSONObject tool = new JSONObject();
                 tool.put("name", toolName);
@@ -198,12 +210,12 @@ public class McpProtocolHandler {
         }
 
         result.put("tools", toolsArray);
-        
-        // Update cache
-        cachedToolsListResponse = result;
-        cachedToolsMap = currentToolsMap;
-        cachedLocalEntryName = localEntryName;
-        
+
+        // Update cache atomically using volatile write
+        synchronized (cacheLock) {
+            cachedEntry = new ToolsListCacheEntry(result, currentToolsMap, localEntryName);
+        }
+
         log.info("Tools list cached with " + toolsArray.length() + " tool(s)");
         return result;
     }
