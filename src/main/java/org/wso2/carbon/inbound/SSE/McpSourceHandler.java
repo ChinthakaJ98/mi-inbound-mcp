@@ -41,15 +41,18 @@ public class McpSourceHandler extends SourceHandler {
     private final SourceConfiguration sourceConfiguration;
     private final McpProtocolHandler protocolHandler;
     private final CorsConfig corsConfig;
+    private final long sseKeepaliveIntervalMs;
     private WorkerPool workerPool;
 
     public McpSourceHandler(SourceConfiguration sourceConfiguration,
                             McpProtocolHandler protocolHandler,
-                            CorsConfig corsConfig) {
+                            CorsConfig corsConfig,
+                            long sseKeepaliveIntervalMs) {
         super(sourceConfiguration);
         this.sourceConfiguration = sourceConfiguration;
         this.protocolHandler = protocolHandler;
         this.corsConfig = corsConfig;
+        this.sseKeepaliveIntervalMs = sseKeepaliveIntervalMs;
     }
 
     @Override
@@ -77,7 +80,7 @@ public class McpSourceHandler extends SourceHandler {
                     sendOptions(request);
                     break;
                 case McpConstants.HTTP_GET:
-                    getWorkerPool().execute(new McpSseWorker(request, sourceConfiguration, corsConfig));
+                    getWorkerPool().execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
                     break;
                 case McpConstants.HTTP_POST:
                     getWorkerPool().execute(new McpRpcWorker(request, sourceConfiguration, protocolHandler, corsConfig));

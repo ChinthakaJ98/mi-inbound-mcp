@@ -44,13 +44,15 @@ public class McpSseWorker implements Runnable {
     private final SourceRequest request;
     private final SourceConfiguration sourceConfiguration;
     private final CorsConfig corsConfig;
+    private final long sseKeepaliveIntervalMs;
     private final String sessionId;
     private final BlockingQueue<String> eventQueue = new LinkedBlockingQueue<>();
 
-    public McpSseWorker(SourceRequest request, SourceConfiguration sourceConfiguration, CorsConfig corsConfig) {
+    public McpSseWorker(SourceRequest request, SourceConfiguration sourceConfiguration, CorsConfig corsConfig, long sseKeepaliveIntervalMs) {
         this.request = request;
         this.sourceConfiguration = sourceConfiguration;
         this.corsConfig = corsConfig;
+        this.sseKeepaliveIntervalMs = sseKeepaliveIntervalMs;
         this.sessionId = UUID.randomUUID().toString();
     }
 
@@ -98,8 +100,8 @@ public class McpSseWorker implements Runnable {
         log.info("MCP SSE session opened: " + sessionId);
         
         if (log.isDebugEnabled()) {
-            log.debug("SSE session " + sessionId + " using keepalive interval: " 
-                    + McpConstants.SSE_KEEPALIVE_INTERVAL_MS + "ms");
+            log.debug("SSE session " + sessionId + " using keepalive interval: "
+                    + sseKeepaliveIntervalMs + "ms");
         }
 
         try (OutputStream out = pipe.getOutputStream()) {
@@ -111,7 +113,7 @@ public class McpSseWorker implements Runnable {
             writeRaw(out, "event: endpoint\ndata: " + endpointUrl + "\n\n");
 
             while (true) {
-                String event = eventQueue.poll(McpConstants.SSE_KEEPALIVE_INTERVAL_MS,
+                String event = eventQueue.poll(sseKeepaliveIntervalMs,
                         TimeUnit.MILLISECONDS);
                 if (event != null) {
                     writeRaw(out, event);

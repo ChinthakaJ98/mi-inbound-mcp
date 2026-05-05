@@ -43,6 +43,7 @@ public class McpInboundListener extends GenericInboundListener {
     private final InboundProcessorParams processorParams;
     private final McpProtocolHandler protocolHandler;
     private final CorsConfig corsConfig;
+    private final long sseKeepaliveIntervalMs;
     private final boolean startInPausedMode;
 
     public McpInboundListener(InboundProcessorParams params) {
@@ -100,14 +101,15 @@ public class McpInboundListener extends GenericInboundListener {
 
         // Load and log SSE configuration
         long sseKeepaliveInterval = McpConstants.DEFAULT_SSE_KEEPALIVE_INTERVAL_MS;
-        String keepaliveParam = props.getProperty(McpConstants.PARAM_SSE_KEEPALIVE_INTERVAL, 
+        String keepaliveParam = props.getProperty(McpConstants.PARAM_SSE_KEEPALIVE_INTERVAL,
                 String.valueOf(McpConstants.DEFAULT_SSE_KEEPALIVE_INTERVAL_MS));
         try {
             sseKeepaliveInterval = Long.parseLong(keepaliveParam.trim());
         } catch (NumberFormatException e) {
-            log.warn("Invalid SSE keepalive interval value '" + keepaliveParam + "', using default " 
+            log.warn("Invalid SSE keepalive interval value '" + keepaliveParam + "', using default "
                     + McpConstants.DEFAULT_SSE_KEEPALIVE_INTERVAL_MS + "ms");
         }
+        this.sseKeepaliveIntervalMs = sseKeepaliveInterval;
         log.info("MCP inbound endpoint [" + name + "] SSE configuration loaded:");
         log.info("  - Keepalive Interval: " + sseKeepaliveInterval + "ms");
 
@@ -187,7 +189,7 @@ public class McpInboundListener extends GenericInboundListener {
                     "PassThrough source configuration is not available — ensure the HTTP transport is started");
         }
 
-        McpSourceHandler mcpSourceHandler = new McpSourceHandler(sourceConfig, protocolHandler, corsConfig);
+        McpSourceHandler mcpSourceHandler = new McpSourceHandler(sourceConfig, protocolHandler, corsConfig, sseKeepaliveIntervalMs);
 
         try {
             PassThroughInboundEndpointHandler.startEndpoint(
