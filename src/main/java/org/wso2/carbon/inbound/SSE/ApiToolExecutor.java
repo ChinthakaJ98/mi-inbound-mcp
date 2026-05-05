@@ -39,7 +39,9 @@ public class ApiToolExecutor {
     private static final int CONNECT_TIMEOUT = 10000;  // 10 seconds
     private static final int READ_TIMEOUT = 30000;     // 30 seconds
 
-    private final int port;
+    private final int httpPort;
+    private final int httpsPort;
+    private final String scheme;
     private final SynapseConfiguration synapseConfig;
 
     public ApiToolExecutor(int port) {
@@ -47,8 +49,37 @@ public class ApiToolExecutor {
     }
 
     public ApiToolExecutor(int port, SynapseConfiguration synapseConfig) {
-        this.port = port;
+        this.httpPort = port;
         this.synapseConfig = synapseConfig;
+
+        int resolvedHttpsPort = -1;
+        String resolvedScheme = "http";
+
+        if (synapseConfig != null) {
+            try {
+                org.apache.axis2.description.TransportInDescription httpsTransport =
+                        synapseConfig.getAxisConfiguration().getTransportIn("https");
+                if (httpsTransport != null) {
+                    org.apache.axis2.description.Parameter portParam = httpsTransport.getParameter("port");
+                    if (portParam != null) {
+                        try {
+                            resolvedHttpsPort = Integer.parseInt(portParam.getValue().toString().trim());
+                            resolvedScheme = "https";
+                            log.debug("HTTPS transport available on port " + resolvedHttpsPort + "; using HTTPS for API calls");
+                        } catch (NumberFormatException e) {
+                            log.debug("Could not parse HTTPS port from Axis2 config", e);
+                        }
+                    }
+                } else {
+                    log.debug("HTTPS transport not configured; using HTTP for API calls");
+                }
+            } catch (Exception e) {
+                log.debug("Could not resolve HTTPS port from Axis2 config; will use HTTP", e);
+            }
+        }
+
+        this.httpsPort = resolvedHttpsPort;
+        this.scheme = resolvedScheme;
     }
 
     public String execute(Map<String, Object> toolDefinition, JSONObject arguments)
@@ -74,7 +105,8 @@ public class ApiToolExecutor {
             path = apiContext + path;
         }
 
-        String url = "http://localhost:" + port + path;
+        int targetPort = "https".equalsIgnoreCase(scheme) ? httpsPort : httpPort;
+        String url = scheme + "://localhost:" + targetPort + path;
         String body = null;
 
         if ("GET".equalsIgnoreCase(method)) {
