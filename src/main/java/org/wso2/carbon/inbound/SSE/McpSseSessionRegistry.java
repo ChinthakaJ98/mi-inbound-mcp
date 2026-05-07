@@ -62,6 +62,10 @@ public class McpSseSessionRegistry {
         return mcpSessionId.equals(boundMcpSession);
     }
 
+    public String getMcpSessionFor(String sseSessionId) {
+        return sseToMcpSessionMapping.get(sseSessionId);
+    }
+
     public McpSseWorker getSession(String sessionId) {
         return sessions.get(sessionId);
     }

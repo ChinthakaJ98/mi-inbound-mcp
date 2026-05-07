@@ -73,7 +73,7 @@ public class McpProtocolHandler {
         this.mainHttpPort = mainHttpPort;
     }
     
-    public HandleResult handle(String requestBody) {
+    public HandleResult handle(String requestBody, String mcpSessionId) {
         JSONObject request;
         try {
             request = new JSONObject(requestBody);

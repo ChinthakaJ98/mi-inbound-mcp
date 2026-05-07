@@ -69,24 +69,18 @@ public class McpRpcWorker implements Runnable {
                 return;
             }
 
-            // Validate MCP session for non-initialize requests
+            // For non-initialize requests, look up the MCP session from the SSE session
+            String mcpSessionId = null;
             if (!McpConstants.METHOD_INITIALIZE.equals(method)) {
-                String incomingSessionId = getHeader(McpConstants.HEADER_MCP_SESSION_ID);
-                if (incomingSessionId != null) {
-                    // Verify MCP session exists and belongs to this SSE session
-                    if (!McpSessionRegistry.getInstance().isValid(incomingSessionId)) {
-                        sendJsonError(404, McpConstants.ERROR_INTERNAL, "Session not found or expired");
-                        return;
-                    }
-                    if (!McpSseSessionRegistry.getInstance().isMcpSessionBoundToSse(sseSessionId, incomingSessionId)) {
-                        sendJsonError(403, McpConstants.ERROR_INVALID_REQUEST,
-                                "MCP session does not belong to this SSE connection");
-                        return;
-                    }
+                mcpSessionId = McpSseSessionRegistry.getInstance().getMcpSessionFor(sseSessionId);
+                if (mcpSessionId == null) {
+                    sendJsonError(400, McpConstants.ERROR_INVALID_REQUEST,
+                            "MCP session not initialized. Call initialize first.");
+                    return;
                 }
             }
 
-            McpProtocolHandler.HandleResult result = protocolHandler.handle(requestBody);
+            McpProtocolHandler.HandleResult result = protocolHandler.handle(requestBody, mcpSessionId);
             if (result.response != null) {
                 log.debug("McpRpcWorker: Sending response to SSE session [" + sseSessionId + "]");
                 sseWorker.sendEvent("message", result.response.toString());
