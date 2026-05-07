@@ -40,13 +40,14 @@ public class McpSseWorker implements Runnable {
 
     private static final byte[] KEEPALIVE_BYTES =
             McpConstants.SSE_KEEPALIVE_COMMENT.getBytes(StandardCharsets.UTF_8);
+    private static final int MAX_EVENT_QUEUE_SIZE = 1000;
 
     private final SourceRequest request;
     private final SourceConfiguration sourceConfiguration;
     private final CorsConfig corsConfig;
     private final long sseKeepaliveIntervalMs;
     private final String sessionId;
-    private final BlockingQueue<String> eventQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<String> eventQueue = new LinkedBlockingQueue<>(MAX_EVENT_QUEUE_SIZE);
 
     public McpSseWorker(SourceRequest request, SourceConfiguration sourceConfiguration, CorsConfig corsConfig, long sseKeepaliveIntervalMs) {
         this.request = request;
@@ -61,11 +62,19 @@ public class McpSseWorker implements Runnable {
     }
 
     public void sendEvent(String eventData) {
-        eventQueue.offer("data: " + eventData + "\n\n");
+        enqueueEvent("data: " + eventData + "\n\n");
     }
 
     public void sendEvent(String eventName, String eventData) {
-        eventQueue.offer("event: " + eventName + "\ndata: " + eventData + "\n\n");
+        enqueueEvent("event: " + eventName + "\ndata: " + eventData + "\n\n");
+    }
+
+    private void enqueueEvent(String event) {
+        if (!eventQueue.offer(event)) {
+            log.warn("SSE event queue full for session " + sessionId + "; dropping oldest event to make room");
+            eventQueue.poll();
+            eventQueue.offer(event);
+        }
     }
 
     @Override
