@@ -33,10 +33,27 @@ import org.apache.synapse.transport.passthru.config.SourceConfiguration;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class McpSourceHandler extends SourceHandler {
 
     private static final Log log = LogFactory.getLog(McpSourceHandler.class);
+
+    private static final ExecutorService sseExecutor = Executors.newCachedThreadPool(
+        new ThreadFactory() {
+            private final AtomicInteger threadCount = new AtomicInteger(0);
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "MCP-SSE-" + threadCount.incrementAndGet());
+                t.setDaemon(true);
+                return t;
+            }
+        }
+    );
 
     private final SourceConfiguration sourceConfiguration;
     private final McpProtocolHandler protocolHandler;
@@ -80,7 +97,7 @@ public class McpSourceHandler extends SourceHandler {
                     sendOptions(request);
                     break;
                 case McpConstants.HTTP_GET:
-                    getWorkerPool().execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
+                    sseExecutor.execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
                     break;
                 case McpConstants.HTTP_POST:
                     getWorkerPool().execute(new McpRpcWorker(request, sourceConfiguration, protocolHandler, corsConfig));
