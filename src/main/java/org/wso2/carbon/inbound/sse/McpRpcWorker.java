@@ -33,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 public class McpRpcWorker implements Runnable {
 
     private static final Log log = LogFactory.getLog(McpRpcWorker.class);
+    private static final int MAX_REQUEST_SIZE = 1048576; // 1 MB
 
     private final SourceRequest request;
     private final SourceConfiguration sourceConfiguration;
@@ -120,7 +121,13 @@ public class McpRpcWorker implements Runnable {
         byte[] buffer = new byte[4096];
         StringBuilder sb = new StringBuilder();
         int n;
+        int totalRead = 0;
         while ((n = in.read(buffer)) != -1) {
+            totalRead += n;
+            if (totalRead > MAX_REQUEST_SIZE) {
+                log.error("Request body exceeds maximum size limit of " + MAX_REQUEST_SIZE + " bytes");
+                throw new IOException("Request body too large: exceeds " + (MAX_REQUEST_SIZE / 1024) + " KB limit");
+            }
             sb.append(new String(buffer, 0, n, StandardCharsets.UTF_8));
         }
         return sb.toString();
