@@ -29,6 +29,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 public class McpRpcWorker implements Runnable {
 
@@ -160,7 +161,12 @@ public class McpRpcWorker implements Runnable {
         for (String param : query.split("&")) {
             String[] kv = param.split("=", 2);
             if (kv.length == 2 && paramName.equals(kv[0])) {
-                return kv[1];
+                try {
+                    return URLDecoder.decode(kv[1], StandardCharsets.UTF_8.name());
+                } catch (Exception e) {
+                    log.warn("Failed to decode query parameter: " + paramName);
+                    return kv[1]; // Return raw value if decode fails
+                }
             }
         }
         return null;
