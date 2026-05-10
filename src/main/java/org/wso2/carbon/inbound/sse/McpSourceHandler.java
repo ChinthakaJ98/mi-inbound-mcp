@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class McpSourceHandler extends SourceHandler {
 
     private static final Log log = LogFactory.getLog(McpSourceHandler.class);
+    private static final int MAX_CONCURRENT_SSE_SESSIONS = 1000;
 
     private static final ExecutorService sseExecutor = Executors.newCachedThreadPool(
         new ThreadFactory() {
@@ -97,6 +98,12 @@ public class McpSourceHandler extends SourceHandler {
                     sendOptions(request);
                     break;
                 case McpConstants.HTTP_GET:
+                    // Admission control: reject if too many SSE sessions are active
+                    if (McpSseSessionRegistry.getInstance().getActiveSessionCount() >= MAX_CONCURRENT_SSE_SESSIONS) {
+                        log.warn("SSE connection rejected: max concurrent sessions (" + MAX_CONCURRENT_SSE_SESSIONS + ") exceeded");
+                        sendSimpleResponse(request, 503, "Service Unavailable: too many active SSE sessions");
+                        return;
+                    }
                     sseExecutor.execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
                     break;
                 case McpConstants.HTTP_POST:
