@@ -34,26 +34,29 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class McpSourceHandler extends SourceHandler {
 
     private static final Log log = LogFactory.getLog(McpSourceHandler.class);
     private static final int MAX_CONCURRENT_SSE_SESSIONS = 1000;
+    private static final int SSE_THREAD_POOL_SIZE = 100;
 
-    private static final ExecutorService sseExecutor = Executors.newCachedThreadPool(
-        new ThreadFactory() {
-            private final AtomicInteger threadCount = new AtomicInteger(0);
-
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(r, "MCP-SSE-" + threadCount.incrementAndGet());
+    // Separate bounded thread pool for SSE 
+    private static final ExecutorService sseExecutor = new ThreadPoolExecutor(
+            SSE_THREAD_POOL_SIZE,
+            SSE_THREAD_POOL_SIZE,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(MAX_CONCURRENT_SSE_SESSIONS),
+            r -> {
+                Thread t = new Thread(r, "MCP-SSE-" + System.nanoTime());
                 t.setDaemon(true);
                 return t;
-            }
-        }
+            },
+            new ThreadPoolExecutor.AbortPolicy() // Reject instead of block if queue is full
     );
 
     private final SourceConfiguration sourceConfiguration;
@@ -104,7 +107,12 @@ public class McpSourceHandler extends SourceHandler {
                         sendSimpleResponse(request, 503, "Service Unavailable: too many active SSE sessions");
                         return;
                     }
-                    sseExecutor.execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
+                    try {
+                        sseExecutor.execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
+                    } catch (java.util.concurrent.RejectedExecutionException e) {
+                        log.error("SSE executor queue full, rejecting connection");
+                        sendSimpleResponse(request, 503, "Service Unavailable: SSE thread pool exhausted");
+                    }
                     break;
                 case McpConstants.HTTP_POST:
                     getWorkerPool().execute(new McpRpcWorker(request, sourceConfiguration, protocolHandler, corsConfig));
