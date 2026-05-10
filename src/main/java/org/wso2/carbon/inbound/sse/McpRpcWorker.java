@@ -53,9 +53,6 @@ public class McpRpcWorker implements Runnable {
         try {
             String requestBody = readBody();
 
-            // Determine method without fully parsing (avoids double-parse on error)
-            String method = extractMethod(requestBody);
-
             // Validate SSE session exists BEFORE calling protocolHandler to prevent side effects
             String sseSessionId = extractQueryParam("sessionId");
             if (sseSessionId == null) {
@@ -70,9 +67,12 @@ public class McpRpcWorker implements Runnable {
                 return;
             }
 
+            // Parse request to determine method
+            String method = extractMethod(requestBody);
+
             // For non-initialize requests, look up the MCP session from the SSE session
             String mcpSessionId = null;
-            if (!McpConstants.METHOD_INITIALIZE.equals(method)) {
+            if (!McpConstants.METHOD_INITIALIZE.equals(method) && !method.isEmpty()) {
                 mcpSessionId = McpSseSessionRegistry.getInstance().getMcpSessionFor(sseSessionId);
                 if (mcpSessionId == null) {
                     sendJsonError(400, McpConstants.ERROR_INVALID_REQUEST,
