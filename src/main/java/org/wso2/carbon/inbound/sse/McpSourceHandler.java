@@ -38,13 +38,15 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * HTTP request dispatcher for the MCP inbound endpoint.
+ */
 public class McpSourceHandler extends SourceHandler {
 
     private static final Log log = LogFactory.getLog(McpSourceHandler.class);
     private static final int MAX_CONCURRENT_SSE_SESSIONS = 1000;
     private static final int SSE_THREAD_POOL_SIZE = 100;
 
-    // Separate bounded thread pool for SSE 
     private static final ExecutorService sseExecutor = new ThreadPoolExecutor(
             SSE_THREAD_POOL_SIZE,
             SSE_THREAD_POOL_SIZE,
@@ -56,7 +58,7 @@ public class McpSourceHandler extends SourceHandler {
                 t.setDaemon(true);
                 return t;
             },
-            new ThreadPoolExecutor.AbortPolicy() // Reject instead of block if queue is full
+            new ThreadPoolExecutor.AbortPolicy()
     );
 
     private final SourceConfiguration sourceConfiguration;
@@ -65,6 +67,7 @@ public class McpSourceHandler extends SourceHandler {
     private final long sseKeepaliveIntervalMs;
     private WorkerPool workerPool;
 
+    /** Constructs the MCP source handler. */
     public McpSourceHandler(SourceConfiguration sourceConfiguration,
                             McpProtocolHandler protocolHandler,
                             CorsConfig corsConfig,
@@ -76,6 +79,7 @@ public class McpSourceHandler extends SourceHandler {
         this.sseKeepaliveIntervalMs = sseKeepaliveIntervalMs;
     }
 
+    /** Processes an incoming HTTP request and routes to appropriate handler. */
     @Override
     public void requestReceived(NHttpServerConnection conn) {
         try {
@@ -135,7 +139,7 @@ public class McpSourceHandler extends SourceHandler {
         }
     }
 
-    // request handlers 
+    /** Sends a 204 No Content response to OPTIONS preflight requests. */
     private void sendOptions(SourceRequest request) {
         try {
             SourceResponse resp = new SourceResponse(sourceConfiguration, 204, request);
@@ -148,8 +152,7 @@ public class McpSourceHandler extends SourceHandler {
         }
     }
 
-    //response helpers 
-
+    /** Adds CORS headers to the response. */
     private void addCorsHeaders(SourceResponse resp) {
         resp.addHeader(McpConstants.HEADER_CORS_ALLOW_ORIGIN, corsConfig.getAllowOrigin());
         resp.addHeader(McpConstants.HEADER_CORS_ALLOW_METHODS, corsConfig.getAllowMethods());
@@ -165,6 +168,7 @@ public class McpSourceHandler extends SourceHandler {
         }
     }
 
+    /** Sends a plain-text response with the specified status code. */
     private void sendSimpleResponse(SourceRequest request, int statusCode, String body) {
         try {
             byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
@@ -189,8 +193,7 @@ public class McpSourceHandler extends SourceHandler {
         }
     }
 
-    // utilities 
-
+    /** Lazily initializes and returns the main worker pool for RPC requests. */
     private WorkerPool getWorkerPool() {
         if (workerPool == null) {
             synchronized (this) {

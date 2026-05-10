@@ -18,7 +18,7 @@
 package org.wso2.carbon.inbound.sse;
 
 /**
- * Configuration holder for CORS headers used in MCP inbound endpoint.
+ * Configuration holder for CORS headers.
  */
 public class CorsConfig {
 
@@ -27,6 +27,7 @@ public class CorsConfig {
     private final String allowHeaders;
     private final String exposeHeaders;
 
+    /** Constructs CORS configuration. */
     public CorsConfig(String allowOrigin, String allowMethods, String allowHeaders, String exposeHeaders) {
         this.allowOrigin = allowOrigin;
         this.allowMethods = allowMethods;
@@ -34,18 +35,22 @@ public class CorsConfig {
         this.exposeHeaders = exposeHeaders;
     }
 
+    /** Returns the Access-Control-Allow-Origin header value. */
     public String getAllowOrigin() {
         return allowOrigin;
     }
 
+    /** Returns the Access-Control-Allow-Methods header value. */
     public String getAllowMethods() {
         return allowMethods;
     }
 
+    /** Returns the Access-Control-Allow-Headers header value. */
     public String getAllowHeaders() {
         return allowHeaders;
     }
 
+    /** Returns the Access-Control-Expose-Headers header value. */
     public String getExposeHeaders() {
         return exposeHeaders;
     }

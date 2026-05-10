@@ -33,21 +33,26 @@ import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 
+/**
+ * Executes an MCP tool by making an HTTP call to a Synapse API resource.
+ */
 public class ApiToolExecutor {
 
     private static final Log log = LogFactory.getLog(ApiToolExecutor.class);
-    private static final int CONNECT_TIMEOUT = 10000;  // 10 seconds
-    private static final int READ_TIMEOUT = 30000;     // 30 seconds
+    private static final int CONNECT_TIMEOUT = 10000;
+    private static final int READ_TIMEOUT = 30000;
 
     private final int httpPort;
     private final int httpsPort;
     private final String scheme;
     private final SynapseConfiguration synapseConfig;
 
+    /** Constructs an API tool executor with the given HTTP port. */
     public ApiToolExecutor(int port) {
         this(port, null);
     }
 
+    /** Constructs an API tool executor. */
     public ApiToolExecutor(int port, SynapseConfiguration synapseConfig) {
         this.httpPort = port;
         this.synapseConfig = synapseConfig;
@@ -82,6 +87,7 @@ public class ApiToolExecutor {
         this.scheme = resolvedScheme;
     }
 
+    /** Executes a tool by making an HTTP request to an API resource. */
     public String execute(Map<String, Object> toolDefinition, JSONObject arguments)
             throws McpToolExecutionException {
         if (toolDefinition == null) {
@@ -136,6 +142,7 @@ public class ApiToolExecutor {
         return sendHttpRequest(method, url, body);
     }
 
+    /** Extracts path parameter names from resource template. */
     private java.util.List<String> extractPathParamNames(String resource) {
         java.util.List<String> params = new java.util.ArrayList<>();
         if (resource == null || resource.isEmpty()) {
@@ -148,6 +155,7 @@ public class ApiToolExecutor {
         return params;
     }
 
+    /** Substitutes path parameters in resource template with argument values. */
     private String substitutePathParameters(String resource, JSONObject arguments) {
         String result = resource;
         Iterator<String> keys = arguments.keys();
@@ -167,6 +175,7 @@ public class ApiToolExecutor {
         return result;
     }
 
+    /** Builds a URL-encoded query string from arguments. */
     private String buildQueryString(JSONObject arguments, java.util.Set<String> exclude) {
         StringBuilder sb = new StringBuilder();
         Iterator<String> keys = arguments.keys();
@@ -193,6 +202,7 @@ public class ApiToolExecutor {
         return sb.toString();
     }
 
+    /** Sends an HTTP request to the specified URL and returns the response body. */
     private String sendHttpRequest(String method, String urlStr, String body)
             throws McpToolExecutionException {
         try {
@@ -238,6 +248,7 @@ public class ApiToolExecutor {
         }
     }
 
+    /** Resolves the API context path. */
     private String resolveApiContext(Map<String, Object> toolDefinition) {
         if (toolDefinition == null) {
             return "";
@@ -271,6 +282,7 @@ public class ApiToolExecutor {
         return apiVal;
     }
 
+    /** Reads the HTTP response body from the connection. */
     private String readResponse(HttpURLConnection conn) throws Exception {
         java.io.InputStream is = null;
         try {

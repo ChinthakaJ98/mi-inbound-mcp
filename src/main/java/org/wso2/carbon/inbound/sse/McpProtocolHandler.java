@@ -38,12 +38,16 @@ class ToolsListCacheEntry {
         this.localEntryName = localEntryName;
     }
 }
+/**
+ * Implements MCP (Model Context Protocol) 2024-11-05 specification.
+ */
 public class McpProtocolHandler {
 
+    /** Result of processing a single RPC request. */
     public static class HandleResult {
         /** JSON-RPC 2.0 response object; {@code null} for notifications (204). */
         public final JSONObject response;
-        /** Non-null only when the call was {@code initialize} — the newly created session ID. */
+        /** Non-null only when the call was {@code initialize}. */
         public final String newSessionId;
 
         HandleResult(JSONObject response, String newSessionId) {
@@ -60,10 +64,10 @@ public class McpProtocolHandler {
     private final SynapseEnvironment synapseEnvironment;
     private final int mainHttpPort;
 
-    // Cache for tools list response (accessed by multiple concurrent request handlers)
     private volatile ToolsListCacheEntry cachedEntry;
     private final Object cacheLock = new Object();
 
+    /** Constructs the MCP protocol handler. */
     public McpProtocolHandler(String serverName, String serverVersion, String localEntryName,
                               SynapseEnvironment synapseEnvironment, int mainHttpPort) {
         this.serverName = serverName;
@@ -72,7 +76,8 @@ public class McpProtocolHandler {
         this.synapseEnvironment = synapseEnvironment;
         this.mainHttpPort = mainHttpPort;
     }
-    
+
+    /** Processes an MCP JSON-RPC 2.0 request. */
     public HandleResult handle(String requestBody, String mcpSessionId) {
         JSONObject request;
         try {
@@ -119,6 +124,7 @@ public class McpProtocolHandler {
         }
     }
 
+    /** Builds the initialize response result. */
     private JSONObject handleInitialize() {
         JSONObject result = new JSONObject();
         result.put("protocolVersion", McpConstants.MCP_PROTOCOL_VERSION);
@@ -135,6 +141,7 @@ public class McpProtocolHandler {
         return result;
     }
 
+    /** Builds the tools/list response result with caching. */
     private JSONObject handleToolsList() {
         SynapseConfiguration synapseConfig = synapseEnvironment.getSynapseConfiguration();
         Map<String, Map<String, Object>> currentToolsMap = getMcpToolsMap(synapseConfig);
@@ -220,6 +227,7 @@ public class McpProtocolHandler {
         return result;
     }
 
+    /** Retrieves the MCP tools map from Synapse configuration. */
     private Map<String, Map<String, Object>> getMcpToolsMap(SynapseConfiguration synapseConfig) {
         if (synapseConfig == null) {
             return null;
@@ -232,6 +240,7 @@ public class McpProtocolHandler {
         }
     }
 
+    /** Handles tools/call request. */
     private JSONObject handleToolsCall(Object id, JSONObject params) {
         String toolName = params.optString("name", null);
         if (toolName == null || toolName.trim().isEmpty()) {
@@ -261,6 +270,7 @@ public class McpProtocolHandler {
         }
     }
 
+    /** Executes a tool by invoking its sequence or API. */
     private String executeTool(String toolName, Map<String, Object> toolDefinition, JSONObject args)
             throws McpToolExecutionException {
         Object seqObj = toolDefinition.get("sequence");
@@ -278,6 +288,7 @@ public class McpProtocolHandler {
         return executor.execute(toolDefinition, args);
     }
 
+    /** Builds an MCP tools/call result object. */
     private JSONObject buildCallResult(String text, boolean isError) {
         JSONObject result = new JSONObject();
         JSONArray content = new JSONArray();
@@ -292,6 +303,7 @@ public class McpProtocolHandler {
         return result;
     }
 
+    /** Builds a JSON-RPC 2.0 success response. */
     private JSONObject successResponse(Object id, JSONObject result) {
         JSONObject response = new JSONObject();
         response.put(McpConstants.JSONRPC, McpConstants.JSONRPC_VERSION);
@@ -300,6 +312,7 @@ public class McpProtocolHandler {
         return response;
     }
 
+    /** Builds a JSON-RPC 2.0 error response. */
     private JSONObject errorResponse(Object id, int code, String message) {
         JSONObject error = new JSONObject();
         error.put(McpConstants.ERROR_CODE, code);
@@ -312,6 +325,7 @@ public class McpProtocolHandler {
         return response;
     }
 
+    /** Checks if a tool definition has a valid API target configuration. */
     private boolean hasValidApiTarget(Map<String, Object> toolDefinition) {
         if (toolDefinition == null || toolDefinition.isEmpty()) {
             return false;
@@ -334,6 +348,7 @@ public class McpProtocolHandler {
                 || hasNonEmptyValue(toolDefinition.get("resource"));
     }
 
+    /** Checks if an object has a non-empty string value. */
     private boolean hasNonEmptyValue(Object value) {
         return value != null && !value.toString().trim().isEmpty();
     }

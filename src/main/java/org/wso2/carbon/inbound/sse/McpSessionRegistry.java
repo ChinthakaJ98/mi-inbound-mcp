@@ -20,6 +20,9 @@ package org.wso2.carbon.inbound.sse;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+/**
+ * Thread-safe singleton registry for active MCP sessions.
+ */
 public class McpSessionRegistry {
 
     private static final McpSessionRegistry INSTANCE = new McpSessionRegistry();
@@ -28,20 +31,24 @@ public class McpSessionRegistry {
     private McpSessionRegistry() {
     }
 
+    /** Returns the singleton instance. */
     public static McpSessionRegistry getInstance() {
         return INSTANCE;
     }
 
+    /** Creates and registers a new MCP session. */
     public String createSession() {
         String id = UUID.randomUUID().toString();
         sessions.add(id);
         return id;
     }
 
+    /** Validates whether an MCP session ID is active. */
     public boolean isValid(String sessionId) {
         return sessionId != null && sessions.contains(sessionId);
     }
 
+    /** Removes an MCP session by ID. */
     public void remove(String sessionId) {
         if (sessionId != null) {
             sessions.remove(sessionId);

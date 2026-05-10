@@ -16,12 +16,15 @@
  * under the License.
  */
 package org.wso2.carbon.inbound.sse;
+/** Thrown when tool execution fails. */
 public class McpToolExecutionException extends Exception {
 
+    /** Constructs an exception with a message. */
     public McpToolExecutionException(String message) {
         super(message);
     }
 
+    /** Constructs an exception with a message and cause. */
     public McpToolExecutionException(String message, Throwable cause) {
         super(message, cause);
     }

@@ -31,6 +31,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+/**
+ * Handles MCP RPC requests received via HTTP POST to /mcp endpoint.
+ */
 public class McpRpcWorker implements Runnable {
 
     private static final Log log = LogFactory.getLog(McpRpcWorker.class);
@@ -41,6 +44,9 @@ public class McpRpcWorker implements Runnable {
     private final McpProtocolHandler protocolHandler;
     private final CorsConfig corsConfig;
 
+    /**
+     * Constructs an MCP RPC worker for a single POST request.
+     */
     public McpRpcWorker(SourceRequest request, SourceConfiguration sourceConfiguration,
                         McpProtocolHandler protocolHandler, CorsConfig corsConfig) {
         this.request = request;
@@ -49,6 +55,9 @@ public class McpRpcWorker implements Runnable {
         this.corsConfig = corsConfig;
     }
 
+    /**
+     * Processes the incoming RPC request.
+     */
     @Override
     public void run() {
         try {
@@ -105,8 +114,7 @@ public class McpRpcWorker implements Runnable {
         }
     }
 
-    // body reading 
-
+    /** Reads request body with size limit enforcement. */
     private String readBody() throws IOException {
         if (!request.isEntityEnclosing()) {
             return "";
@@ -134,6 +142,7 @@ public class McpRpcWorker implements Runnable {
         return sb.toString();
     }
 
+    /** Extracts the JSON-RPC method name from request body. */
     private String extractMethod(String body) {
         try {
             return new JSONObject(body).optString(McpConstants.METHOD, "");
@@ -142,7 +151,7 @@ public class McpRpcWorker implements Runnable {
         }
     }
 
-    // header helpers 
+    /** Retrieves an HTTP header value from the request. */
     private String getHeader(String headerName) {
         if (request.getRequest() == null) {
             return null;
@@ -151,7 +160,7 @@ public class McpRpcWorker implements Runnable {
         return h != null ? h.getValue() : null;
     }
 
-    /** Extracts a named parameter from the request URI query string. */
+    /** Extracts a URL-decoded query parameter from the request URI. */
     private String extractQueryParam(String paramName) {
         String uri = request.getUri();
         if (uri == null || !uri.contains("?")) {
@@ -172,8 +181,7 @@ public class McpRpcWorker implements Runnable {
         return null;
     }
 
-    // response helpers 
-
+    /** Adds CORS headers to the response. */
     private void addCorsHeaders(SourceResponse resp) {
         resp.addHeader(McpConstants.HEADER_CORS_ALLOW_ORIGIN, corsConfig.getAllowOrigin());
         resp.addHeader(McpConstants.HEADER_CORS_EXPOSE_HEADERS, corsConfig.getExposeHeaders());
@@ -184,6 +192,7 @@ public class McpRpcWorker implements Runnable {
         }
     }
 
+    /** Sends a 202 Accepted response with optional MCP session header. */
     private void sendAcceptedResponse(String sessionId) throws IOException {
         SourceResponse sourceResponse = new SourceResponse(sourceConfiguration, 202, request);
         addCorsHeaders(sourceResponse);
@@ -195,6 +204,7 @@ public class McpRpcWorker implements Runnable {
         request.getConnection().requestOutput();
     }
 
+    /** Sends a JSON response with the specified status code and body. */
     private void sendJsonResponse(int statusCode, byte[] body, String sessionId) throws IOException {
         SourceResponse sourceResponse = new SourceResponse(sourceConfiguration, statusCode, request);
         sourceResponse.addHeader(McpConstants.HEADER_CONTENT_TYPE,
@@ -218,6 +228,7 @@ public class McpRpcWorker implements Runnable {
         pipe.setSerializationComplete(true);
     }
 
+    /** Sends a JSON-RPC 2.0 error response. */
     private void sendJsonError(int statusCode, int errorCode, String message) throws IOException {
         JSONObject err = new JSONObject();
         err.put(McpConstants.ERROR_CODE, errorCode);

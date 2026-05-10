@@ -34,6 +34,9 @@ import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.Map;
+/**
+ * Executes an MCP tool by invoking a Synapse sequence.
+ */
 public class SequenceToolExecutor {
 
     private static final Log log = LogFactory.getLog(SequenceToolExecutor.class);
@@ -41,11 +44,13 @@ public class SequenceToolExecutor {
     private final SynapseEnvironment synapseEnvironment;
     private final String sequenceName;
 
+    /** Constructs a sequence tool executor. */
     public SequenceToolExecutor(SynapseEnvironment synapseEnvironment, String sequenceName) {
         this.synapseEnvironment = synapseEnvironment;
         this.sequenceName = sequenceName;
     }
 
+    /** Executes a tool by invoking a Synapse sequence. */
     public String execute(String toolName, JSONObject args, Map<String, Object> toolDefinition)
             throws McpToolExecutionException {
 
@@ -92,6 +97,7 @@ public class SequenceToolExecutor {
         return extractResult(mc, mediationCompleted);
     }
 
+    /** Resolves the HTTP method from tool definition. */
     private String resolveHttpMethod(Map<String, Object> toolDefinition) {
         if (toolDefinition == null) {
             return "POST";
@@ -101,6 +107,7 @@ public class SequenceToolExecutor {
                 ? method.toString().trim().toUpperCase() : "POST";
     }
 
+    /** Injects JSON arguments as payload into the message context. */
     private void injectPayload(MessageContext mc, JSONObject args) throws McpToolExecutionException {
         if (!(mc instanceof Axis2MessageContext)) {
             log.warn("MessageContext is not Axis2MessageContext; skipping payload injection");
@@ -119,6 +126,7 @@ public class SequenceToolExecutor {
         }
     }
 
+    /** Simulates transport context for the message. */
     private void simulateTransportContext(MessageContext mc, String httpMethod) {
         if (!(mc instanceof Axis2MessageContext)) {
             return;
@@ -139,10 +147,10 @@ public class SequenceToolExecutor {
                 org.apache.axis2.context.MessageContext.TRANSPORT_HEADERS, headers);
     }
 
+    /** Extracts the execution result from the message context. */
     private String extractResult(MessageContext mc, boolean mediationCompleted)
             throws McpToolExecutionException {
 
-        // Synapse fault — standard MI error handling sets ERROR_MESSAGE on the MC
         Object synapseError = mc.getProperty(SynapseConstants.ERROR_MESSAGE);
         if (synapseError != null) {
             Object errCode = mc.getProperty(SynapseConstants.ERROR_CODE);
@@ -151,7 +159,6 @@ public class SequenceToolExecutor {
             throw new McpToolExecutionException("Sequence fault: " + errMsg);
         }
 
-        // Response payload left on the message context by the sequence
         String payloadResult = extractPayload(mc);
         if (payloadResult != null && !payloadResult.isEmpty()) {
             if (log.isDebugEnabled()) {
@@ -167,9 +174,7 @@ public class SequenceToolExecutor {
         return "";
     }
 
-    /**
-     * Reads the response payload — tries JSON first, then XML SOAP body.
-     */
+    /** Extracts response payload from message context. */
     private String extractPayload(MessageContext mc) {
         if (!(mc instanceof Axis2MessageContext)) {
             return null;

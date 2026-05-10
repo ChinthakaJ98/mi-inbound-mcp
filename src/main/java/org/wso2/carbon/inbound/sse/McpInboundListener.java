@@ -34,6 +34,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.Properties;
+/**
+ * WSO2 Micro Integrator inbound endpoint listener for MCP.
+ */
 public class McpInboundListener extends GenericInboundListener {
 
     private static final Log log = LogFactory.getLog(McpInboundListener.class);
@@ -46,6 +49,7 @@ public class McpInboundListener extends GenericInboundListener {
     private final long sseKeepaliveIntervalMs;
     private final boolean startInPausedMode;
 
+    /** Constructs the MCP inbound listener. */
     public McpInboundListener(InboundProcessorParams params) {
 
         super(params);
@@ -120,6 +124,7 @@ public class McpInboundListener extends GenericInboundListener {
                 synapseEnvironment, mainHttpPort);
     }
 
+    /** Initializes the inbound endpoint. */
     @Override
     public void init() {
         log.info("MCP inbound endpoint [" + name + "] initializing on port " + port
@@ -137,17 +142,20 @@ public class McpInboundListener extends GenericInboundListener {
         startListener();
     }
 
+    /** Destroys the inbound endpoint and closes the listening port. */
     @Override
     public void destroy() {
         log.info("MCP inbound endpoint [" + name + "] stopping on port " + port);
         HTTPEndpointManager.getInstance().closeEndpoint(port);
     }
 
+    /** Pauses the inbound endpoint by closing the listening port. */
     @Override
     public void pause() {
         HTTPEndpointManager.getInstance().closeEndpoint(port);
     }
 
+    /** Activates the inbound endpoint. */
     @Override
     public boolean activate() {
         if (isPortUsedByAnotherApplication(port)) {
@@ -161,6 +169,7 @@ public class McpInboundListener extends GenericInboundListener {
         return activated;
     }
 
+    /** Deactivates the inbound endpoint by closing the listening port. */
     @Override
     public boolean deactivate() {
         HTTPEndpointManager.getInstance().closeEndpoint(port);
@@ -171,11 +180,13 @@ public class McpInboundListener extends GenericInboundListener {
         return deactivated;
     }
 
+    /** Checks if the inbound endpoint is deactivated. */
     @Override
     public boolean isDeactivated() {
         return !HTTPEndpointManager.getInstance().isEndpointRunning(name, port);
     }
 
+    /** Starts the MCP HTTP server on the configured port. */
     private boolean startListener() {
         SourceConfiguration sourceConfig;
         try {
@@ -203,6 +214,7 @@ public class McpInboundListener extends GenericInboundListener {
         }
     }
 
+    /** Resolves the main HTTP port from Axis2 configuration. */
     private int resolveMainHttpPort(SynapseEnvironment synapseEnvironment) {
         try {
             org.apache.axis2.description.TransportInDescription httpTransport =
@@ -218,12 +230,13 @@ public class McpInboundListener extends GenericInboundListener {
         } catch (Exception e) {
             log.warn("Could not resolve main HTTP port from Axis2 config; using 8290", e);
         }
-        return 8290; // default MI HTTP port (8280 base + 10 offset)
+        return 8290;
     }
 
+    /** Checks if a port is already in use by another application. */
     private boolean isPortUsedByAnotherApplication(int port) {
         if (PassThroughInboundEndpointHandler.isEndpointRunning(port)) {
-            return false; // already registered in our transport — not another app
+            return false;
         }
         try (ServerSocket srv = new ServerSocket(port)) {
             return false;

@@ -34,6 +34,9 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+/**
+ * Manages a persistent Server-Sent Events (SSE) connection.
+ */
 public class McpSseWorker implements Runnable {
 
     private static final Log log = LogFactory.getLog(McpSseWorker.class);
@@ -49,6 +52,7 @@ public class McpSseWorker implements Runnable {
     private final String sessionId;
     private final BlockingQueue<String> eventQueue = new LinkedBlockingQueue<>(MAX_EVENT_QUEUE_SIZE);
 
+    /** Constructs an SSE worker for a GET request to /mcp. */
     public McpSseWorker(SourceRequest request, SourceConfiguration sourceConfiguration, CorsConfig corsConfig, long sseKeepaliveIntervalMs) {
         this.request = request;
         this.sourceConfiguration = sourceConfiguration;
@@ -57,18 +61,22 @@ public class McpSseWorker implements Runnable {
         this.sessionId = UUID.randomUUID().toString();
     }
 
+    /** Returns the unique session ID for this SSE connection. */
     public String getSessionId() {
         return sessionId;
     }
 
+    /** Queues an SSE event without an explicit event name. */
     public void sendEvent(String eventData) {
         enqueueEvent("data: " + eventData + "\n\n");
     }
 
+    /** Queues an SSE event with an explicit event name and data. */
     public void sendEvent(String eventName, String eventData) {
         enqueueEvent("event: " + eventName + "\ndata: " + eventData + "\n\n");
     }
 
+    /** Enqueues an event to the bounded queue. Drops oldest if full. */
     private void enqueueEvent(String event) {
         if (!eventQueue.offer(event)) {
             log.warn("SSE event queue full for session " + sessionId + "; dropping oldest event to make room");
@@ -77,6 +85,7 @@ public class McpSseWorker implements Runnable {
         }
     }
 
+    /** Runs the SSE worker: sends events and keep-alive comments. */
     @Override
     public void run() {
         SourceResponse sourceResponse = new SourceResponse(sourceConfiguration, 200, request);
@@ -144,6 +153,7 @@ public class McpSseWorker implements Runnable {
         }
     }
 
+    /** Retrieves an HTTP header value from the request. */
     private String getHeader(String headerName) {
         if (request.getRequest() == null) {
             return null;
@@ -152,6 +162,7 @@ public class McpSseWorker implements Runnable {
         return h != null ? h.getValue() : null;
     }
 
+    /** Determines the scheme (http or https) for the endpoint URL. */
     private String getScheme() {
         // Check X-Forwarded-Proto header (set by TLS-terminating proxies like nginx, AWS ALB)
         String forwardedProto = getHeader("X-Forwarded-Proto");
@@ -167,6 +178,7 @@ public class McpSseWorker implements Runnable {
         return "http";
     }
 
+    /** Writes a UTF-8 string to the output stream and flushes it. */
     private void writeRaw(OutputStream out, String text) throws IOException {
         out.write(text.getBytes(StandardCharsets.UTF_8));
         out.flush();
