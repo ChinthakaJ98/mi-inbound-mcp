@@ -108,7 +108,7 @@
               <Bundle-Name>${project.artifactId}</Bundle-Name>
               <Bundle-Version>${project.version}</Bundle-Version>
               <Bundle-Description>${project.description}</Bundle-Description>
-              <Export-Package>org.wso2.carbon.inbound.SSE</Export-Package>
+              <Export-Package>org.wso2.carbon.inbound.sse</Export-Package>
             </manifestEntries>
           </archive>
         </configuration>

@@ -19,12 +19,12 @@
 
 <connector>
     <!-- MCP Protocol Handler for Custom Inbound Endpoint -->
-    <component name="mcp-protocol" package="org.wso2.carbon.inbound.SSE">
+    <component name="mcp-protocol" package="org.wso2.carbon.inbound.sse">
         <description>MCP (Model Context Protocol) Inbound Endpoint Protocol Handler</description>
         <subComponents>
             <subComponent>
                 <name>inboundEndpointClass</name>
-                <type>org.wso2.carbon.inbound.SSE.McpInboundListener</type>
+                <type>org.wso2.carbon.inbound.sse.McpInboundListener</type>
             </subComponent>
         </subComponents>
     </component>

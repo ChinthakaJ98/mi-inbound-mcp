@@ -15,7 +15,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.wso2.carbon.inbound.SSE;
+package org.wso2.carbon.inbound.sse;
 
 /**
  * Configuration holder for CORS headers used in MCP inbound endpoint.
