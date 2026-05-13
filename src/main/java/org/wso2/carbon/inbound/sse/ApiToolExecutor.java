@@ -1,0 +1,307 @@
+/*
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.wso2.carbon.inbound.sse;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.synapse.api.API;
+import org.apache.synapse.config.SynapseConfiguration;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.Map;
+
+/**
+ * Executes an MCP tool by making an HTTP call to a Synapse API resource.
+ */
+public class ApiToolExecutor {
+
+    private static final Log log = LogFactory.getLog(ApiToolExecutor.class);
+    private static final int CONNECT_TIMEOUT = 10000;
+    private static final int READ_TIMEOUT = 30000;
+
+    private final int httpPort;
+    private final int httpsPort;
+    private final String scheme;
+    private final SynapseConfiguration synapseConfig;
+
+    /** Constructs an API tool executor with the given HTTP port. */
+    public ApiToolExecutor(int port) {
+        this(port, null);
+    }
+
+    /** Constructs an API tool executor. */
+    public ApiToolExecutor(int port, SynapseConfiguration synapseConfig) {
+        this.httpPort = port;
+        this.synapseConfig = synapseConfig;
+
+        int resolvedHttpsPort = -1;
+        String resolvedScheme = "http";
+
+        if (synapseConfig != null) {
+            try {
+                org.apache.axis2.description.TransportInDescription httpsTransport =
+                        synapseConfig.getAxisConfiguration().getTransportIn("https");
+                if (httpsTransport != null) {
+                    org.apache.axis2.description.Parameter portParam = httpsTransport.getParameter("port");
+                    if (portParam != null) {
+                        try {
+                            resolvedHttpsPort = Integer.parseInt(portParam.getValue().toString().trim());
+                            resolvedScheme = "https";
+                            log.debug("HTTPS transport available on port " + resolvedHttpsPort + "; using HTTPS for API calls");
+                        } catch (NumberFormatException e) {
+                            log.debug("Could not parse HTTPS port from Axis2 config", e);
+                        }
+                    }
+                } else {
+                    log.debug("HTTPS transport not configured; using HTTP for API calls");
+                }
+            } catch (Exception e) {
+                log.debug("Could not resolve HTTPS port from Axis2 config; will use HTTP", e);
+            }
+        }
+
+        this.httpsPort = resolvedHttpsPort;
+        this.scheme = resolvedScheme;
+    }
+
+    /** Executes a tool by making an HTTP request to an API resource. */
+    public String execute(Map<String, Object> toolDefinition, JSONObject arguments)
+            throws McpToolExecutionException {
+        if (toolDefinition == null) {
+            throw new McpToolExecutionException("Tool definition is null");
+        }
+
+        String method = (String) toolDefinition.getOrDefault("method", "POST");
+        String resource = (String) toolDefinition.getOrDefault("resource", "/");
+        
+        String apiContext = resolveApiContext(toolDefinition);
+
+        String path = substitutePathParameters(resource, arguments);
+        if (apiContext != null && !apiContext.isEmpty() && !apiContext.equals("/")) {
+            if (!apiContext.startsWith("/")) {
+                apiContext = "/" + apiContext;
+                log.warn("API context did not start with '/'; normalized to '" + apiContext + "'.");
+            }
+            if (!path.startsWith("/")) {
+                path = "/" + path;
+            }
+            path = apiContext + path;
+        }
+
+        int targetPort = "https".equalsIgnoreCase(scheme) ? httpsPort : httpPort;
+        String url = scheme + "://localhost:" + targetPort + path;
+        String body = null;
+
+        if ("GET".equalsIgnoreCase(method)) {
+            java.util.Set<String> pathParams = new java.util.HashSet<>(extractPathParamNames(resource));
+            String query = buildQueryString(arguments, pathParams);
+            if (query != null && !query.isEmpty()) {
+                url = url + "?" + query;
+            }
+        } else {
+            if (arguments.has("payload")) {
+                Object payloadVal = arguments.opt("payload");
+                body = (payloadVal != null) ? payloadVal.toString() : null;
+            } else {
+                java.util.Set<String> pathParams = new java.util.HashSet<>(extractPathParamNames(resource));
+                JSONObject bodyOnly = new JSONObject(arguments.toString());
+                for (String param : pathParams) {
+                    bodyOnly.remove(param);
+                }
+                body = bodyOnly.toString();
+            }
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Executing tool: " + method + " " + url + (body != null ? " with body: " + body : ""));
+        }
+
+        return sendHttpRequest(method, url, body);
+    }
+
+    /** Extracts path parameter names from resource template. */
+    private java.util.List<String> extractPathParamNames(String resource) {
+        java.util.List<String> params = new java.util.ArrayList<>();
+        if (resource == null || resource.isEmpty()) {
+            return params;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\{([^/}]+)\\}").matcher(resource);
+        while (m.find()) {
+            params.add(m.group(1));
+        }
+        return params;
+    }
+
+    /** Substitutes path parameters in resource template with argument values. */
+    private String substitutePathParameters(String resource, JSONObject arguments) {
+        String result = resource;
+        Iterator<String> keys = arguments.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object value = arguments.opt(key);
+            if (value != null) {
+                String placeholder = "{" + key + "}";
+                try {
+                    result = result.replace(placeholder, URLEncoder.encode(value.toString(), "UTF-8"));
+                } catch (Exception e) {
+                    log.warn("Failed to encode path parameter " + key + "; using raw value", e);
+                    result = result.replace(placeholder, value.toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    /** Builds a URL-encoded query string from arguments. */
+    private String buildQueryString(JSONObject arguments, java.util.Set<String> exclude) {
+        StringBuilder sb = new StringBuilder();
+        Iterator<String> keys = arguments.keys();
+        boolean first = true;
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (exclude != null && exclude.contains(key)) {
+                continue;
+            }
+            Object value = arguments.opt(key);
+            if (value != null) {
+                if (!first) {
+                    sb.append("&");
+                }
+                try {
+                    sb.append(URLEncoder.encode(key, "UTF-8")).append("=")
+                            .append(URLEncoder.encode(value.toString(), "UTF-8"));
+                    first = false;
+                } catch (Exception e) {
+                    log.warn("Failed to encode query parameter " + key, e);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Sends an HTTP request to the specified URL and returns the response body. */
+    private String sendHttpRequest(String method, String urlStr, String body)
+            throws McpToolExecutionException {
+        try {
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            if ("PATCH".equalsIgnoreCase(method)) {
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            } else {
+                conn.setRequestMethod(method);
+            }
+            conn.setConnectTimeout(CONNECT_TIMEOUT);
+            conn.setReadTimeout(READ_TIMEOUT);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+
+            if (body != null && !body.isEmpty()) {
+                conn.setDoOutput(true);
+                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] input = body.getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+            }
+
+            int responseCode = conn.getResponseCode();
+            String responseBody = readResponse(conn);
+
+            if (responseCode < 200 || responseCode >= 300) {
+                String errMsg = "HTTP " + responseCode + ": " + responseBody;
+                log.warn("API call failed: " + errMsg);
+                throw new McpToolExecutionException(errMsg);
+            }
+
+            log.debug("API call succeeded (HTTP " + responseCode + "): " + responseBody);
+            return responseBody;
+
+        } catch (McpToolExecutionException e) {
+            throw e;
+        } catch (Exception e) {
+            String errMsg = "Failed to execute API tool: " + e.getMessage();
+            log.error(errMsg, e);
+            throw new McpToolExecutionException(errMsg, e);
+        }
+    }
+
+    /** Resolves the API context path. */
+    private String resolveApiContext(Map<String, Object> toolDefinition) {
+        if (toolDefinition == null) {
+            return "";
+        }
+        Object apiObj = toolDefinition.get("api");
+        if (apiObj == null) {
+            return "";
+        }
+        String apiVal = apiObj.toString().trim();
+        if (apiVal.isEmpty()) {
+            return "";
+        }
+
+        if (apiVal.startsWith("/")) {
+            return apiVal;
+        }
+
+        if (this.synapseConfig != null) {
+            try {
+                API api = this.synapseConfig.getAPI(apiVal);
+                if (api != null) {
+                    String ctx = api.getContext();
+                    if (ctx != null) {
+                        return ctx;
+                    }
+                }
+            } catch (NoSuchMethodError | Exception e) {
+                log.debug("Could not resolve API name '" + apiVal + "' via SynapseConfiguration: " + e.getMessage());
+            }
+        }
+        return apiVal;
+    }
+
+    /** Reads the HTTP response body from the connection. */
+    private String readResponse(HttpURLConnection conn) throws Exception {
+        java.io.InputStream is = null;
+        try {
+            is = conn.getInputStream();
+        } catch (java.io.IOException e) {
+            is = conn.getErrorStream();
+        }
+
+        if (is == null) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+        }
+        return sb.toString();
+    }
+}

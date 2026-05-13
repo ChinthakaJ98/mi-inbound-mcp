@@ -1,0 +1,208 @@
+/*
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.wso2.carbon.inbound.sse;
+
+import org.apache.axis2.transport.base.threads.WorkerPool;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.http.HttpException;
+import org.apache.http.nio.NHttpServerConnection;
+import org.apache.synapse.transport.passthru.Pipe;
+import org.apache.synapse.transport.passthru.ProtocolState;
+import org.apache.synapse.transport.passthru.SourceContext;
+import org.apache.synapse.transport.passthru.SourceHandler;
+import org.apache.synapse.transport.passthru.SourceRequest;
+import org.apache.synapse.transport.passthru.SourceResponse;
+import org.apache.synapse.transport.passthru.config.SourceConfiguration;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingQueue;
+
+/**
+ * HTTP request dispatcher for the MCP inbound endpoint.
+ */
+public class McpSourceHandler extends SourceHandler {
+
+    private static final Log log = LogFactory.getLog(McpSourceHandler.class);
+    private static final int MAX_CONCURRENT_SSE_SESSIONS = 1000;
+    private static final int SSE_THREAD_POOL_SIZE = 100;
+
+    private static final ExecutorService sseExecutor = new ThreadPoolExecutor(
+            SSE_THREAD_POOL_SIZE,
+            SSE_THREAD_POOL_SIZE,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(MAX_CONCURRENT_SSE_SESSIONS),
+            r -> {
+                Thread t = new Thread(r, "MCP-SSE-" + System.nanoTime());
+                t.setDaemon(true);
+                return t;
+            },
+            new ThreadPoolExecutor.AbortPolicy()
+    );
+
+    private final SourceConfiguration sourceConfiguration;
+    private final McpProtocolHandler protocolHandler;
+    private final CorsConfig corsConfig;
+    private final long sseKeepaliveIntervalMs;
+    private WorkerPool workerPool;
+
+    /** Constructs the MCP source handler. */
+    public McpSourceHandler(SourceConfiguration sourceConfiguration,
+                            McpProtocolHandler protocolHandler,
+                            CorsConfig corsConfig,
+                            long sseKeepaliveIntervalMs) {
+        super(sourceConfiguration);
+        this.sourceConfiguration = sourceConfiguration;
+        this.protocolHandler = protocolHandler;
+        this.corsConfig = corsConfig;
+        this.sseKeepaliveIntervalMs = sseKeepaliveIntervalMs;
+    }
+
+    /** Processes an incoming HTTP request and routes to appropriate handler. */
+    @Override
+    public void requestReceived(NHttpServerConnection conn) {
+        try {
+            SourceRequest request = getSourceRequest(conn);
+            if (request == null) {
+                return;
+            }
+
+            String method = request.getRequest() != null
+                    ? request.getRequest().getRequestLine().getMethod().toUpperCase() : "";
+            String uri = request.getUri();
+
+            // Strip query string for path matching
+            String path = uri.contains("?") ? uri.substring(0, uri.indexOf("?")) : uri;
+
+            if (!McpConstants.PATH_MCP.equals(path)) {
+                sendSimpleResponse(request, 404, "Not Found: only /mcp is served by this endpoint");
+                return;
+            }
+
+            switch (method) {
+                case "OPTIONS":
+                    sendOptions(request);
+                    break;
+                case McpConstants.HTTP_GET:
+                    // Admission control: reject if too many SSE sessions are active
+                    if (McpSseSessionRegistry.getInstance().getActiveSessionCount() >= MAX_CONCURRENT_SSE_SESSIONS) {
+                        log.warn("SSE connection rejected: max concurrent sessions (" + MAX_CONCURRENT_SSE_SESSIONS + ") exceeded");
+                        sendSimpleResponse(request, 503, "Service Unavailable: too many active SSE sessions");
+                        return;
+                    }
+                    try {
+                        sseExecutor.execute(new McpSseWorker(request, sourceConfiguration, corsConfig, sseKeepaliveIntervalMs));
+                    } catch (java.util.concurrent.RejectedExecutionException e) {
+                        log.error("SSE executor queue full, rejecting connection");
+                        sendSimpleResponse(request, 503, "Service Unavailable: SSE thread pool exhausted");
+                    }
+                    break;
+                case McpConstants.HTTP_POST:
+                    getWorkerPool().execute(new McpRpcWorker(request, sourceConfiguration, protocolHandler, corsConfig));
+                    break;
+                default:
+                    sendSimpleResponse(request, 405, "Method Not Allowed: use GET, POST, or OPTIONS");
+                    break;
+            }
+
+        } catch (HttpException e) {
+            log.error("HttpException in McpSourceHandler.requestReceived", e);
+            informReaderError(conn);
+            SourceContext.updateState(conn, ProtocolState.CLOSED);
+            sourceConfiguration.getSourceConnections().shutDownConnection(conn, true);
+        } catch (IOException e) {
+            logIOException(conn, e);
+            informReaderError(conn);
+            SourceContext.updateState(conn, ProtocolState.CLOSED);
+            sourceConfiguration.getSourceConnections().shutDownConnection(conn, true);
+        }
+    }
+
+    /** Sends a 204 No Content response to OPTIONS preflight requests. */
+    private void sendOptions(SourceRequest request) {
+        try {
+            SourceResponse resp = new SourceResponse(sourceConfiguration, 204, request);
+            addCorsHeaders(resp);
+            resp.connect(null);
+            SourceContext.setResponse(request.getConnection(), resp);
+            request.getConnection().requestOutput();
+        } catch (Exception e) {
+            log.error("Failed to send MCP OPTIONS response", e);
+        }
+    }
+
+    /** Adds CORS headers to the response. */
+    private void addCorsHeaders(SourceResponse resp) {
+        resp.addHeader(McpConstants.HEADER_CORS_ALLOW_ORIGIN, corsConfig.getAllowOrigin());
+        resp.addHeader(McpConstants.HEADER_CORS_ALLOW_METHODS, corsConfig.getAllowMethods());
+        resp.addHeader(McpConstants.HEADER_CORS_ALLOW_HEADERS, corsConfig.getAllowHeaders());
+        resp.addHeader(McpConstants.HEADER_CORS_EXPOSE_HEADERS, corsConfig.getExposeHeaders());
+        
+        if (log.isDebugEnabled()) {
+            log.debug("CORS headers added to response:");
+            log.debug("  - Allow-Origin: " + corsConfig.getAllowOrigin());
+            log.debug("  - Allow-Methods: " + corsConfig.getAllowMethods());
+            log.debug("  - Allow-Headers: " + corsConfig.getAllowHeaders());
+            log.debug("  - Expose-Headers: " + corsConfig.getExposeHeaders());
+        }
+    }
+
+    /** Sends a plain-text response with the specified status code. */
+    private void sendSimpleResponse(SourceRequest request, int statusCode, String body) {
+        try {
+            byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+            SourceResponse resp = new SourceResponse(sourceConfiguration, statusCode, request);
+            addCorsHeaders(resp);
+            if (bodyBytes.length > 0) {
+                resp.addHeader(McpConstants.HEADER_CONTENT_TYPE, "text/plain; charset=UTF-8");
+            }
+            Pipe pipe = new Pipe(sourceConfiguration.getBufferFactory().getBuffer(),
+                    "MCP-ERR", sourceConfiguration);
+            pipe.attachConsumer(request.getConnection());
+            resp.connect(pipe);
+            SourceContext.setResponse(request.getConnection(), resp);
+            request.getConnection().requestOutput();
+            try (OutputStream out = pipe.getOutputStream()) {
+                out.write(bodyBytes);
+                out.flush();
+            }
+            pipe.setSerializationComplete(true);
+        } catch (Exception e) {
+            log.error("Failed to send MCP response (status=" + statusCode + ")", e);
+        }
+    }
+
+    /** Lazily initializes and returns the main worker pool for RPC requests. */
+    private WorkerPool getWorkerPool() {
+        if (workerPool == null) {
+            synchronized (this) {
+                if (workerPool == null) {
+                    workerPool = sourceConfiguration.getWorkerPool();
+                }
+            }
+        }
+        return workerPool;
+    }
+
+}
