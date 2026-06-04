@@ -1,0 +1,31 @@
+{
+    "name": "MCP (Inbound)",
+    "owner": "WSO2",
+    "product": "MI",
+    "mavenGroupId": "org.wso2.integration.inbound",
+    "mavenArtifactId": "mi-sse",
+    "rank": 20,
+    "type": "Inbound",
+    "category": "Developer Tools",
+    "documentationUrl": "",
+    "description": "MCP (Model Context Protocol) SSE Inbound Endpoint for WSO2 Micro Integrator",
+    "status": "Active",
+    "labels": [
+        "integration",
+        "mcp",
+        "sse",
+        "inbound-endpoint",
+        "ai"
+    ],
+    "releases": [
+        {
+            "tagName": "v0.1.0",
+            "products": [
+                "MI 4.6.0"
+            ],
+            "operations": [],
+            "connections": [],
+            "isHidden": false
+        }
+    ]
+}

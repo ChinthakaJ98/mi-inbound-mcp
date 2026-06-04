@@ -97,11 +97,13 @@ public class McpInboundListener extends GenericInboundListener {
                 corsExposeHeaders);
 
         // Log CORS configuration
-        log.info("MCP inbound endpoint [" + name + "] CORS configuration loaded:");
-        log.info("  - Allow-Origin: " + corsAllowOrigin);
-        log.info("  - Allow-Methods: " + corsAllowMethods);
-        log.info("  - Allow-Headers: " + corsAllowHeaders);
-        log.info("  - Expose-Headers: " + corsExposeHeaders);
+        if (log.isDebugEnabled()) {
+            log.debug("MCP inbound endpoint [" + name + "] CORS configuration:");
+            log.debug("  - Allow-Origin: " + corsAllowOrigin);
+            log.debug("  - Allow-Methods: " + corsAllowMethods);
+            log.debug("  - Allow-Headers: " + corsAllowHeaders);
+            log.debug("  - Expose-Headers: " + corsExposeHeaders);
+        } 
 
         // Load and log SSE configuration
         long sseKeepaliveInterval = McpConstants.DEFAULT_SSE_KEEPALIVE_INTERVAL_MS;
@@ -114,8 +116,11 @@ public class McpInboundListener extends GenericInboundListener {
                     + McpConstants.DEFAULT_SSE_KEEPALIVE_INTERVAL_MS + "ms");
         }
         this.sseKeepaliveIntervalMs = sseKeepaliveInterval;
-        log.info("MCP inbound endpoint [" + name + "] SSE configuration loaded:");
-        log.info("  - Keepalive Interval: " + sseKeepaliveInterval + "ms");
+        
+        if (log.isDebugEnabled()) {
+            log.debug("MCP inbound endpoint [" + name + "] SSE configuration:");
+            log.debug("  - Keepalive Interval: " + sseKeepaliveInterval + "ms");
+        }
 
         SynapseEnvironment synapseEnvironment = params.getSynapseEnvironment();
         int mainHttpPort = resolveMainHttpPort(synapseEnvironment);
