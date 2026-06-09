@@ -22,7 +22,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.wso2.integration.inbound</groupId>
   <artifactId>mi-inbound-mcp</artifactId>
-  <version>0.1.1-SNAPSHOT</version>
+  <version>0.1.1</version>
   <name>WSO2 MI SSE Inbound Endpoint</name>
   <description>Server-Sent Events (SSE) Inbound Endpoint for WSO2 Micro Integrator</description>
   <url>http://wso2.org</url>
@@ -84,7 +84,7 @@
     <connection>scm:git:https://github.com/wso2-extensions/mi-inbound-mcp.git</connection>
     <url>https://github.com/wso2-extensions/mi-inbound-mcp.git</url>
     <developerConnection>scm:git:https://github.com/wso2-extensions/mi-inbound-mcp.git</developerConnection>
-    <tag>HEAD</tag>
+    <tag>v0.1.1</tag>
   </scm>
 
   <build>
