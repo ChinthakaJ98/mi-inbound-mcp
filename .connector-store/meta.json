@@ -3,7 +3,7 @@
     "owner": "WSO2",
     "product": "MI",
     "mavenGroupId": "org.wso2.integration.inbound",
-    "mavenArtifactId": "mi-sse",
+    "mavenArtifactId": "mi-inbound-mcp",
     "rank": 20,
     "type": "Inbound",
     "category": "Developer Tools",
