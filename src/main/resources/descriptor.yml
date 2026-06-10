@@ -1,6 +1,6 @@
 dependencies:
   - groupId: "org.wso2.integration.inbound"
-    artifactId: "mi-sse"
+    artifactId: "mi-inbound-mcp"
     version: "${mcp.inbound.version}"
 
 repositories:
