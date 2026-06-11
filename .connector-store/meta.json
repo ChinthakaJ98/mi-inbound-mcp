@@ -24,15 +24,6 @@
                 "MI 4.6.0"
             ],
             "connections": []
-        },
-        {
-            "tagName": "v0.1.0",
-            "products": [
-                "MI 4.6.0"
-            ],
-            "operations": [],
-            "connections": [],
-            "isHidden": false
         }
     ]
 }
